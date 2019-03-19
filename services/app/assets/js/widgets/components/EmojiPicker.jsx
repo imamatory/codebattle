@@ -35,7 +35,6 @@ class EmojiPicker extends React.Component {
   }
 
   onSelect = (emoji) => {
-    console.log(emoji);
     const { addEmoji } = this.props;
     addEmoji(emoji, this.closeEmoji);
   }
