@@ -43,7 +43,8 @@ class EmojiPicker extends React.Component {
     const {
       x, y, width, height,
     } = this.buttonRef.current.getBoundingClientRect();
-    this.props.setSelectionAndRange();
+    const { setSelectionAndRange } = this.props;
+    setSelectionAndRange();
     this.setState({
       isOpen: true,
       positionX: x,

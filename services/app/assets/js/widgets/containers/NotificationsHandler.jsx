@@ -8,8 +8,8 @@ import GameStatusCodes from '../config/gameStatusCodes';
 import Toast from '../components/Toast';
 import ActionsAfterGame from '../components/Toast/ActionsAfterGame';
 import CloseButton from '../components/Toast/CloseButton';
-import { updateGameUI } from '../actions';
-import { sendResetRematch } from '../middlewares/Game';
+import { updateGameUI as updateGameUIAction } from '../actions';
+import { sendRejectToRematch } from '../middlewares/Game';
 
 const toastOptions = {
   hideProgressBar: true,
@@ -21,14 +21,25 @@ const toastOptions = {
 };
 
 class NotificationsHandler extends Component {
+  componentDidMount() {
+    const { gameStatus: { status } } = this.props;
+
+    if (status === GameStatusCodes.gameOver
+      || status === GameStatusCodes.rematchInApproval
+      || status === GameStatusCodes.rematchRejected) {
+      this.showActionsAfterGame();
+    }
+  }
+
   componentDidUpdate(prevProps) {
     const {
-      gameStatus: { solutionStatus, status, checking, rematchStatus },
+      gameStatus: {
+        solutionStatus, status, checking, rematchState,
+      },
       isCurrentUserPlayer,
     } = this.props;
 
-    const currentRematchState = rematchStatus.state;
-    const isChangeRematchState = prevProps.gameStatus.rematchStatus.state !== currentRematchState;
+    const isChangeRematchState = prevProps.gameStatus.rematchState !== rematchState;
 
     if (isCurrentUserPlayer && prevProps.gameStatus.checking && !checking) {
       this.showCheckingStatusMessage(solutionStatus);
@@ -39,7 +50,7 @@ class NotificationsHandler extends Component {
       this.showActionsAfterGame();
     }
 
-    if(isChangeRematchState && currentRematchState !== 'init') {
+    if (isChangeRematchState && rematchState !== 'none' && rematchState !== 'rejected') {
       this.showActionsAfterGame();
     }
   }
@@ -65,7 +76,6 @@ class NotificationsHandler extends Component {
       isCurrentUserPlayer,
       updateGameUI,
       isShowActionsAfterGame,
-      gameStatus: { rematchStatus },
     } = this.props;
 
     if (!isCurrentUserPlayer) {
@@ -84,7 +94,7 @@ class NotificationsHandler extends Component {
         autoClose: false,
         onClose: () => {
           updateGameUI({ showToastActionsAfterGame: false });
-          sendResetRematch(rematchStatus.state);
+          sendRejectToRematch();
         },
         onOpen: () => updateGameUI({ showToastActionsAfterGame: true }),
       },
@@ -121,7 +131,7 @@ class NotificationsHandler extends Component {
     toast(
       <Toast header="Success">
         <Alert variant="success">
-          `${winner.user_name} has won the game!`
+          {`${winner.name} has won the game!`}
         </Alert>
       </Toast>,
     );
@@ -148,7 +158,7 @@ const mapStateToProps = (state) => {
 };
 
 const mapDispatchToProps = {
-  updateGameUI
+  updateGameUI: updateGameUIAction,
 };
 
 export default connect(mapStateToProps, mapDispatchToProps)(NotificationsHandler);

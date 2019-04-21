@@ -4,7 +4,7 @@ import GameStatusCodes from '../config/gameStatusCodes';
 import EditorModes from '../config/editorModes';
 import i18n from '../../i18n';
 import { makeEditorTextKey } from '../reducers';
-import { defaultEditorHeight } from '../config/editorSettings';
+import defaultEditorHeight from '../config/editorSettings';
 
 export const currentUserIdSelector = state => state.user.currentUserId;
 
@@ -88,9 +88,6 @@ export const gameStatusTitleSelector = (state) => {
 };
 
 export const gameTaskSelector = state => state.game.task;
-export const gameStatusNameSelector = state => state.game.gameStatus.status;
-
-export const gameStartsAtSelector = state => state.game.gameStatus.startsAt;
 
 export const gameLangsSelector = state => state.game.langs;
 

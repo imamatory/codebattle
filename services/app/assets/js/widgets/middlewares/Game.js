@@ -15,9 +15,13 @@ const initGameChannel = (dispatch) => {
     const {
       status,
       starts_at: startsAt,
+      joins_at: joinsAt,
       players: [firstPlayer, secondPlayer],
       task,
+      rematch_state: rematchState,
+      rematch_initiator_id: rematchInitiatorId,
     } = response;
+
 
     // const firstEditorLang = _.find(languages, { slug: user1.editor_lang });
     // const users = [{ ...user1, type: userTypes.firstPlayer }];
@@ -64,7 +68,15 @@ const initGameChannel = (dispatch) => {
     if (task) {
       dispatch(actions.setGameTask({ task }));
     }
-    dispatch(actions.updateGameStatus({ status, startsAt }));
+
+    dispatch(actions.updateGameStatus({
+      status,
+      startsAt,
+      joinsAt,
+      rematchState,
+      rematchInitiatorId,
+    }));
+
     dispatch(actions.finishStoreInit());
   };
 
@@ -91,10 +103,6 @@ export const sendEditorText = (text, langSlug = null) => (dispatch, getState) =>
 
 export const sendGiveUp = () => {
   channel.push('give_up');
-};
-
-export const sendResetRematch = (rematchState) => {
-  channel.push('rematch:send_reset', { rematch_state: rematchState });
 };
 
 export const sendOfferToRematch = () => {
@@ -166,6 +174,7 @@ export const editorReady = () => (dispatch) => {
   channel.on('user:joined', ({
     status,
     starts_at: startsAt,
+    joins_at: joinsAt,
     players: [firstPlayer, secondPlayer],
     task,
   }) => {
@@ -203,7 +212,7 @@ export const editorReady = () => (dispatch) => {
       }));
     }
 
-    dispatch(actions.updateGameStatus({ status, startsAt }));
+    dispatch(actions.updateGameStatus({ status, startsAt, joinsAt }));
   });
 
   channel.on('user:won', ({ players, status, msg }) => {
@@ -217,11 +226,11 @@ export const editorReady = () => (dispatch) => {
   });
 
   channel.on('rematch:update_status', (payload) => {
-    dispatch(actions.updateRematchStatus(payload));
+    dispatch(actions.updateGameStatus(payload));
   });
 
-  channel.on('rematch:redirect_to_new_game', ({ game_id }) => {
-    actions.redirectToNewGame(game_id);
+  channel.on('rematch:redirect_to_new_game', ({ game_id: newGameId }) => {
+    actions.redirectToNewGame(newGameId);
   });
 };
 
