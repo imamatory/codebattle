@@ -8,28 +8,28 @@ defmodule Codebattle.GameProcess.Play do
   import Ecto.Query, warn: false
   import Codebattle.GameProcess.Auth
 
-  alias Codebattle.{Repo, Game, User, UserGame}
+  alias Codebattle.{Repo, Game}
 
   alias Codebattle.GameProcess.{
     Server,
     GlobalSupervisor,
     Engine,
-    Fsm,
     Play,
     Player,
     FsmHelpers,
-    Elo,
-    ActiveGames,
-    Notifier
+    ActiveGames
   }
 
   alias Codebattle.CodeCheck.Checker
-  alias Codebattle.Bot.RecorderServer
-  alias Codebattle.Bot.PlaybookPlayerRunner
+  alias Codebattle.Bot.PlaybookAsyncRunner
 
   # get data interface
   def active_games do
     ActiveGames.list_games()
+  end
+
+  def active_games(params) do
+    ActiveGames.list_games(params)
   end
 
   def game_info(id) do
@@ -59,7 +59,34 @@ defmodule Codebattle.GameProcess.Play do
         preload: [:users, :user_games]
       )
 
-    games = Repo.all(query)
+    Repo.all(query)
+  end
+
+  def get_completed_game_info(game) do
+    winner_user_game =
+      game.user_games
+      |> Enum.filter(fn user_game -> user_game.result == "won" end)
+      |> List.first()
+
+    loser_user_game =
+      game.user_games
+      |> Enum.filter(fn user_game -> user_game.result != "won" end)
+      |> List.first()
+
+    winner = Player.build(winner_user_game)
+    loser = Player.build(loser_user_game)
+
+    players =
+      [winner, loser]
+      |> Enum.sort(&(&1.creator > &2.creator))
+
+    %{
+      id: game.id,
+      players: players,
+      updated_at: game.updated_at,
+      duration: game.duration_in_seconds,
+      level: game.level
+    }
   end
 
   def get_game(id) do
@@ -109,7 +136,8 @@ defmodule Codebattle.GameProcess.Play do
   def create_rematch_game_with_bot(game_id) do
     fsm = Play.get_fsm(game_id)
     engine = get_engine(fsm)
-    real_player = FsmHelpers.get_second_player(fsm) |> Player.rebuild()
+    task = FsmHelpers.get_task(fsm)
+    real_player = FsmHelpers.get_second_player(fsm) |> Player.rebuild(task)
     level = FsmHelpers.get_level(fsm)
     type = FsmHelpers.get_type(fsm)
     timeout_seconds = FsmHelpers.get_timeout_seconds(fsm)
@@ -122,6 +150,7 @@ defmodule Codebattle.GameProcess.Play do
     else
       case create_bot_game(bot, game_params) do
         {:ok, new_game_id} ->
+          {:ok, _bot_pid} = PlaybookAsyncRunner.create_server(%{game_id: new_game_id, bot: bot})
           {:ok, new_fsm} = engine.join_game(new_game_id, real_player)
 
           start_timeout_timer(new_game_id, new_fsm)
@@ -162,8 +191,9 @@ defmodule Codebattle.GameProcess.Play do
     ActiveGames.terminate_game(game_id)
 
     fsm = Play.get_fsm(game_id)
-    first_player = FsmHelpers.get_first_player(fsm) |> Player.rebuild()
-    second_player = FsmHelpers.get_second_player(fsm) |> Player.rebuild()
+    task = FsmHelpers.get_task(fsm)
+    first_player = FsmHelpers.get_first_player(fsm) |> Player.rebuild(task)
+    second_player = FsmHelpers.get_second_player(fsm) |> Player.rebuild(task)
     level = FsmHelpers.get_level(fsm)
     type = FsmHelpers.get_type(fsm)
     timeout_seconds = FsmHelpers.get_timeout_seconds(fsm)
@@ -186,7 +216,6 @@ defmodule Codebattle.GameProcess.Play do
   end
 
   def rematch_reject(game_id) do
-    fsm = get_fsm(game_id)
     {_response, new_fsm} = Server.call_transition(game_id, :rematch_reject, %{})
     {:ok, new_fsm}
   end
@@ -255,8 +284,8 @@ defmodule Codebattle.GameProcess.Play do
 
         :ok
 
-      {:error, _reason} ->
-        {:error, _reason}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -312,11 +341,8 @@ defmodule Codebattle.GameProcess.Play do
             engine.handle_won_game(id, player, fsm)
             {:ok, fsm, result, output}
 
-          {:game_over, {:ok, result, output}} ->
-            {:ok, result, output}
-
-          {_, {:error, result, output}} ->
-            {:error, result, output}
+          {_, result} ->
+            result
         end
 
       {:error, reason} ->

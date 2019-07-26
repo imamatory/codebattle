@@ -8,16 +8,14 @@ defmodule Codebattle.GameProcess.Engine.Bot do
     Fsm,
     Player,
     FsmHelpers,
-    Elo,
-    ActiveGames,
-    Notifier
+    ActiveGames
   }
 
-  alias Codebattle.{Repo, User, Game, UserGame}
+  alias Codebattle.{Repo, Game}
   alias Codebattle.Bot.{RecorderServer, Playbook}
-  alias Codebattle.User.Achievements
 
   import Ecto.Query, warn: false
+  #require Logger
 
   def create_game(bot, %{"level" => level, "type" => type}) do
     bot_player = Player.build(bot, %{creator: true})
@@ -42,38 +40,43 @@ defmodule Codebattle.GameProcess.Engine.Bot do
   end
 
   def join_game(game_id, second_player) do
-    game = Play.get_game(game_id)
     fsm = Play.get_fsm(game_id)
-    first_player = FsmHelpers.get_first_player(fsm)
     level = FsmHelpers.get_level(fsm)
+    first_player = FsmHelpers.get_first_player(fsm)
 
     case get_playbook(level) do
-      {:ok, playbook} ->
-        update_game!(game_id, %{state: "playing", task_id: playbook.task.id})
+      {:ok, %{task: task} = _playbook} ->
 
         case Server.call_transition(game_id, :join, %{
-               player: second_player,
-               task: playbook.task,
-               joins_at: TimeHelper.utc_now()
-             }) do
+              players: [
+                Player.rebuild(first_player, task),
+                Player.rebuild(second_player, task)
+              ],
+              task: task,
+              joins_at: TimeHelper.utc_now()
+            }) do
+
           {:ok, fsm} ->
             ActiveGames.add_participant(fsm)
 
-            {:ok, _} = Codebattle.Bot.Supervisor.start_record_server(game_id, second_player, fsm)
+            level = FsmHelpers.get_level(fsm)
 
-            Codebattle.Bot.PlaybookAsyncRunner.call(%{
+            update_game!(game_id, %{state: "playing", task_id: task.id})
+            start_record_fsm(game_id, FsmHelpers.get_players(fsm), fsm)
+            Codebattle.Bot.PlaybookAsyncRunner.run!(%{
               game_id: game_id,
-              task_id: playbook.task.id
+              task_id: task.id,
+              opponent_data: get_opponent_task_data(FsmHelpers.get_second_player(fsm), level)
             })
 
             {:ok, fsm}
 
-          {:error, _reason} ->
-            {:error, _reason}
+          {:error, reason} ->
+            {:error, reason}
         end
 
-      {:error, _reason} ->
-        {:error, _reason}
+      {:error, reason} ->
+        {:error, reason}
     end
   end
 
@@ -122,6 +125,31 @@ defmodule Codebattle.GameProcess.Engine.Bot do
       {:ok, playbook}
     else
       {:error, :playbook_not_found}
+    end
+  end
+
+  defp get_opponent_task_data(player, game_level) do
+    start_sequence_position = %{
+      "elementary" => 300_000,
+      "easy" => 500_000,
+      "medium" => 800_000,
+      "hard" => 1_500_000}
+
+    end_sequence_position = %{
+      "elementary" => 100_000,
+      "easy" => 300_000,
+      "medium" => 500_000,
+      "hard" => 1_100_000}
+
+    lower_level = 1000
+    highest_level = 1500
+
+    sequence_step = div(start_sequence_position[game_level] - end_sequence_position[game_level], highest_level - lower_level)  #400
+    n = player.rating || 1000 - lower_level
+    cond do
+      player.rating <= lower_level -> start_sequence_position[game_level]
+      player.rating > highest_level -> end_sequence_position[game_level]
+      true -> start_sequence_position[game_level] - n * sequence_step
     end
   end
 end

@@ -60,16 +60,7 @@ defmodule Codebattle.GameProcess.Fsm do
 
   defstate waiting_opponent do
     defevent join(params), data: data do
-      players = data.players ++ [params.player]
-
-      new_data = Map.merge(data, params)
-
-      next_state(:playing, %{
-        new_data
-        | players: players,
-          task: params.task,
-          joins_at: params.joins_at
-      })
+      next_state(:playing, Map.merge(data, params))
     end
 
     defevent update_editor_params(_params) do
@@ -103,8 +94,17 @@ defmodule Codebattle.GameProcess.Fsm do
     end
 
     defevent timeout(_params), data: data do
-     players = update_player_params(data.players, %{game_result: :timeout, id: get_first_player(%{data: data}).id})
-     players = update_player_params(players, %{game_result: :timeout, id: get_second_player(%{data: data}).id})
+      players =
+        update_player_params(data.players, %{
+          game_result: :timeout,
+          id: get_first_player(%{data: data}).id
+        })
+
+      players =
+        update_player_params(players, %{
+          game_result: :timeout,
+          id: get_second_player(%{data: data}).id
+        })
 
       next_state(:timeout, %{data | players: players})
     end

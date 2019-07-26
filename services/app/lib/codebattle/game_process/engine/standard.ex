@@ -8,16 +8,18 @@ defmodule Codebattle.GameProcess.Engine.Standard do
     Fsm,
     Player,
     FsmHelpers,
-    Elo,
     ActiveGames,
     Notifier
   }
 
-  alias Codebattle.{Repo, User, Game, UserGame}
+  alias Codebattle.{Repo, Game}
   alias Codebattle.Bot.RecorderServer
-  alias Codebattle.User.Achievements
 
-  def create_game(player, %{"level" => level, "type" => type, "timeout_seconds" => timeout_seconds}) do
+  def create_game(player, %{
+        "level" => level,
+        "type" => type,
+        "timeout_seconds" => timeout_seconds
+      }) do
     game =
       Repo.insert!(%Game{
         state: "waiting_opponent",
@@ -60,7 +62,10 @@ defmodule Codebattle.GameProcess.Engine.Standard do
     task = get_random_task(level, [first_player.id, second_player.id])
 
     case Server.call_transition(game_id, :join, %{
-           player: second_player,
+           players: [
+             Player.rebuild(first_player, task),
+             Player.rebuild(second_player, task)
+           ],
            joins_at: TimeHelper.utc_now(),
            task: task
          }) do
@@ -68,15 +73,15 @@ defmodule Codebattle.GameProcess.Engine.Standard do
         ActiveGames.add_participant(fsm)
 
         update_game!(game_id, %{state: "playing", task_id: task.id})
+        start_record_fsm(game_id, FsmHelpers.get_players(fsm), fsm)
 
-        {:ok, _} = Codebattle.Bot.Supervisor.start_record_server(game_id, first_player, fsm)
-        {:ok, _} = Codebattle.Bot.Supervisor.start_record_server(game_id, second_player, fsm)
-
-        Notifier.call(:game_opponent_join, %{
-          first_player: first_player,
-          second_player: second_player,
-          game_id: game_id
-        })
+        Task.async(fn ->
+          Notifier.call(:game_opponent_join, %{
+            first_player: FsmHelpers.get_first_player(fsm),
+            second_player: FsmHelpers.get_second_player(fsm),
+            game_id: game_id
+          })
+        end)
 
         {:ok, fsm}
 

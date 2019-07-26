@@ -235,6 +235,12 @@ msgid "SourceCode"
 msgstr ""
 
 # JSX
+msgid "Task: "
+msgstr ""
+
+msgid "Found a mistake? Have something to add? Pull Requests are welcome: "
+msgstr ""
+
 msgid "Run your code!"
 msgstr ""
 
@@ -244,7 +250,19 @@ msgstr ""
 msgid "Test failed with arguments (%{arguments})"
 msgstr ""
 
+msgid ", and you passed %{successCount} from %{assertsCount} asserts. (%{percent}%)"
+msgstr ""
+
 msgid "Yay! All tests passed!!111"
+msgstr ""
+
+msgid "Give up"
+msgstr ""
+
+msgid "Сheck"
+msgstr ""
+
+msgid "Сheck status:"
 msgstr ""
 
 msgid "Oops"

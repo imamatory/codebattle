@@ -2,6 +2,7 @@ import React, { Component } from 'react';
 import { connect } from 'react-redux';
 import _ from 'lodash';
 import cn from 'classnames';
+import { FontAwesomeIcon } from '@fortawesome/react-fontawesome';
 import GameStatusCodes from '../config/gameStatusCodes';
 import * as selectors from '../selectors';
 import {
@@ -25,18 +26,17 @@ class LeftEditorToolbar extends Component {
 
   renderNameplate = (player = {}, onlineUsers) => {
     const isOnline = _.find(onlineUsers, { id: player.id });
-    const classNames = cn('fa fa-plug align-middle ml-2 text-success',
-      {
-        'text-success': isOnline,
-        'text-secondary': !isOnline,
-      });
 
     return (
-      <div>
+      <div className="d-flex align-items-center">
         <UserInfo user={player} />
-        <span
-          className={classNames}
-        />
+        <div>
+          {
+              isOnline
+                ? <FontAwesomeIcon icon="snowman" className="text-success ml-2" />
+                : <FontAwesomeIcon icon="skull-crossbones" className="text-secondary ml-2" />
+            }
+        </div>
       </div>
     );
   };
@@ -48,14 +48,14 @@ class LeftEditorToolbar extends Component {
         className="btn btn-sm btn-light border rounded"
         onClick={() => compressEditor(userId)}
       >
-        <i className="fa fa-compress" aria-hidden="true" />
+        <i className="fas fa-compress-arrows-alt" aria-hidden="true" />
       </button>
       <button
         type="button"
         className="btn btn-sm btn-light border rounded ml-2"
         onClick={() => expandEditor(userId)}
       >
-        <i className="fa fa-expand" aria-hidden="true" />
+        <i className="fas fa-expand-arrows-alt" aria-hidden="true" />
       </button>
     </div>
   );

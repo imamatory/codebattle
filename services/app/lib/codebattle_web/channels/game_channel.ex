@@ -2,7 +2,7 @@ defmodule CodebattleWeb.GameChannel do
   @moduledoc false
   use CodebattleWeb, :channel
 
-  require Logger
+  # require Logger
 
   alias Codebattle.GameProcess.{Play, FsmHelpers, ActiveGames, Server}
 
@@ -74,10 +74,10 @@ defmodule CodebattleWeb.GameChannel do
         active_games =
           Play.active_games()
           |> Enum.map(fn {game_id, users, game_info} ->
-            %{game_id: game_id, users: Map.values(users), game_info: game_info}
+            %{game_id: game_id, players: Map.values(users), game_info: game_info}
           end)
 
-        completed_games = Play.completed_games()
+        completed_games = Enum.map(Play.completed_games(), &Play.get_completed_game_info/1)
 
         CodebattleWeb.Endpoint.broadcast_from!(self(), "lobby", "game:game_over", %{
           active_games: active_games,
@@ -101,17 +101,18 @@ defmodule CodebattleWeb.GameChannel do
     game_id = get_game_id(socket)
 
     fsm = Play.get_fsm(game_id)
-    currentUserId = socket.assigns.user_id
+    current_user_id = socket.assigns.user_id
 
     case fsm.state do
       :rematch_in_approval ->
         handle_in("rematch:accept_offer", nil, socket)
 
       :game_over ->
-        process_rematch_offer(game_id, currentUserId, socket)
+        process_rematch_offer(game_id, current_user_id, socket)
 
       :timeout ->
-        process_rematch_offer(game_id, currentUserId, socket)
+        process_rematch_offer(game_id, current_user_id, socket)
+
       _ ->
         {:noreply, socket}
     end
@@ -157,10 +158,10 @@ defmodule CodebattleWeb.GameChannel do
         active_games =
           Play.active_games()
           |> Enum.map(fn {game_id, users, game_info} ->
-            %{game_id: game_id, users: Map.values(users), game_info: game_info}
+            %{game_id: game_id, players: Map.values(users), game_info: game_info}
           end)
 
-        completed_games = Play.completed_games()
+        completed_games = Enum.map(Play.completed_games(), &Play.get_completed_game_info/1)
 
         push(socket, "user:check_result", %{
           solution_status: true,
@@ -195,6 +196,28 @@ defmodule CodebattleWeb.GameChannel do
 
         {:noreply, socket}
 
+      {:failure, result, failure_tests_count, success_tests_count, output} ->
+        push(socket, "user:check_result", %{
+          solution_status: false,
+          result: result,
+          output: output,
+          asserts_count: success_tests_count + failure_tests_count,
+          success_count: success_tests_count,
+          user_id: user.id
+        })
+
+        broadcast_from!(socket, "user:finish_check", %{
+          user: socket.assigns.current_user
+        })
+
+        broadcast_from!(socket, "output:data", %{
+          user_id: user.id,
+          result: result,
+          output: output
+        })
+
+        {:noreply, socket}
+
       {:error, result, output} ->
         push(socket, "user:check_result", %{
           solution_status: false,
@@ -215,7 +238,7 @@ defmodule CodebattleWeb.GameChannel do
 
         {:noreply, socket}
 
-      {:ok, result, output} ->
+     {:ok, result, output} ->
         push(socket, "user:check_result", %{
           solution_status: true,
           result: result,

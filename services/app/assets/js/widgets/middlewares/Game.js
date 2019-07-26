@@ -160,15 +160,19 @@ export const editorReady = () => (dispatch) => {
   });
 
   channel.on('user:check_result', ({
-    status, players, solution_status: solutionStatus, output, result, user_id: userId,
+    status, players, solution_status: solutionStatus,
+    output, result, asserts_count: assertsCount, success_count: successCount, user_id: userId,
   }) => {
     // const currentUserId = selectors.currentUserIdSelector(state);
 
     const newGameStatus = solutionStatus ? { status } : {};
+    const asserts = { assertsCount, successCount };
     if (players) {
       dispatch(actions.updateGamePlayers({ players }));
     }
-    dispatch(actions.updateExecutionOutput({ output, result, userId }));
+    dispatch(actions.updateExecutionOutput({
+      output, result, asserts, userId,
+    }));
     dispatch(actions.updateGameStatus({ ...newGameStatus, solutionStatus }));
     dispatch(actions.updateCheckStatus({ [userId]: false }));
   });

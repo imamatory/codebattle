@@ -18,6 +18,10 @@ defmodule Codebattle.GameProcess.ActiveGames do
 
   def list_games, do: :ets.match_object(@table_name, :_)
 
+  def list_games(params) do
+    @table_name |> :ets.match_object({:_, :_, params})
+  end
+
   def get_playing_bots do
     list_games()
     |> Enum.map(fn {_, item, _} -> item |> Map.values() |> hd end)
@@ -33,29 +37,19 @@ defmodule Codebattle.GameProcess.ActiveGames do
   end
 
   def create_game(game_id, fsm) do
-    :ets.insert(@table_name, {game_key(game_id), build_players(fsm), build_game_params(fsm)})
+    :ets.insert_new(@table_name, {game_key(game_id), build_players(fsm), build_game_params(fsm)})
 
     :ok
   end
 
   def update_state(game_id, fsm) do
-    :ets.update_element(@table_name, game_key(game_id), [
-      {2, build_players(fsm)},
-      {3, build_game_params(fsm)}
-    ])
-
-    :ok
+    :ets.insert(@table_name, {game_key(game_id), build_players(fsm), build_game_params(fsm)})
   end
 
   def add_participant(fsm) do
     game_id = FsmHelpers.get_game_id(fsm)
 
-    :ets.update_element(@table_name, game_key(game_id), [
-      {2, build_players(fsm)},
-      {3, build_game_params(fsm)}
-    ])
-
-    :ok
+    :ets.insert(@table_name, {game_key(game_id), build_players(fsm), build_game_params(fsm)})
   end
 
   def playing?(player_id) do
@@ -90,6 +84,7 @@ defmodule Codebattle.GameProcess.ActiveGames do
   defp build_game_params(fsm) do
     %{
       state: fsm.state,
+      is_bot: FsmHelpers.bot_game?(fsm),
       level: FsmHelpers.get_level(fsm),
       starts_at: FsmHelpers.get_starts_at(fsm),
       type: FsmHelpers.get_type(fsm),
